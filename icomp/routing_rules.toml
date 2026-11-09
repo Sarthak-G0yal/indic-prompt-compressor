@@ -1,0 +1,47 @@
+# Rule table for the icomp router.
+# Source: results/01_deepseek/RUN4_full_v2.md (Run 4: DeepSeek V4.1 Flash, n = 50 per cell, judge sarvam-105b, τ = 0.95).
+#   balanced = cheapest method whose mean quality retained ≥ 0.95
+#   safe     = cheapest method whose 95% CI lower bound ≥ 0.95
+# saving = measured ₹ saving on DeepSeek; glm_saving = projected with the GLM-5.3 tokenizer; retained / ci_lo = quality vs the original prompt.
+
+[settings]
+tau = 0.95
+min_tokens = 120          # shorter prompts (target-tokenizer tokens) are only cleaned (M1)
+min_saving = 0.10         # if the prepared prompt saves less than this vs the original (input tokens), use M1 instead
+digit_ratio_max = 0.03    # above this share of digits, pruning methods are replaced by their non-pruning version
+latin_ratio_max = 0.35    # above this share of Latin letters (code, English mixed in), don't translate
+chat_long_tokens = 300    # chat prompts at least this long go via English (M3_b5); shorter ones get M1
+abstain_fallback = true   # English-route QA answer says "not mentioned" -> re-send the original prompt
+
+# ---------------------------------------------------------------- DeepSeek (measured)
+[deepseek.hi.qa]
+balanced = { method = "M5", saving = 69.9, glm_saving = 80.7, retained = 1.000, ci_lo = 0.970 }
+safe     = { method = "M5", saving = 69.9, glm_saving = 80.7, retained = 1.000, ci_lo = 0.970 }
+
+[deepseek.hi.summ]
+balanced = { method = "M5_80", saving = 57.4, glm_saving = 73.2, retained = 0.969, ci_lo = 0.931 }
+safe     = { method = "M3_b5", saving = 53.5, glm_saving = 70.3, retained = 1.001, ci_lo = 0.974 }
+
+[deepseek.kn.qa]
+balanced = { method = "M5_80", saving = 69.3, glm_saving = 86.6, retained = 0.968, ci_lo = 0.875 }
+safe     = { method = "M2_80", saving = 17.2, glm_saving = 18.2, retained = 1.032, ci_lo = 0.979 }
+
+[deepseek.kn.summ]
+balanced = { method = "M5_80", saving = 63.9, glm_saving = 84.9, retained = 0.976, ci_lo = 0.936 }
+safe     = { method = "M3_b5", saving = 61.8, glm_saving = 83.8, retained = 1.004, ci_lo = 0.967 }
+
+[deepseek.ta.qa]   # hardest cell: no English route passes τ; M3h (41%, 0.947) is available as a manual override
+balanced = { method = "M2_80", saving = 17.1, glm_saving = 18.7, retained = 1.011, ci_lo = 1.000 }
+safe     = { method = "M2_80", saving = 17.1, glm_saving = 18.7, retained = 1.011, ci_lo = 1.000 }
+
+[deepseek.ta.summ]
+balanced = { method = "M5", saving = 64.4, glm_saving = 86.0, retained = 0.973, ci_lo = 0.919 }
+safe     = { method = "M3_b5", saving = 57.0, glm_saving = 82.5, retained = 0.994, ci_lo = 0.951 }
+
+# ---------------------------------------------------------------- other families
+# glm: same choices as DeepSeek, quality not yet measured on GLM (projected). The router copies the deepseek rows and marks them.
+# indic_efficient (sarvam-105b, gemma4): their tokenizers are already close to English (parity 1.3–1.9), translation was never
+# validated on them, so only M1 is used.
+[families]
+glm = { copy_from = "deepseek", status = "projected" }
+indic_efficient = { method = "M1", status = "not validated: Indic-efficient tokenizer" }

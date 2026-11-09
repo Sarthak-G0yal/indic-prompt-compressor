@@ -1,0 +1,9 @@
+.env
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+cache/
+models/
+data/raw/
+.pytest_cache/
+presentation/node_modules/

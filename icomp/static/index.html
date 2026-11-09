@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Indic Prompt Compressor</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1c2330; --muted: #5d6778; --line: #dfe3ea;
+  --accent: #2f5bd3; --accent-ink: #ffffff; --good: #1f7a4d; --warn: #9a6200; --bad: #b3261e;
+  --chip: #eef1f6; --code: #f2f4f8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151c; --panel: #181e27; --ink: #e6e9ef; --muted: #9aa4b5; --line: #2a3240;
+    --accent: #6d93ff; --accent-ink: #0d1117; --good: #4cc38a; --warn: #e0a84a; --bad: #ff7b72;
+    --chip: #222a36; --code: #141a22;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", "Noto Sans", "Noto Sans Devanagari", "Noto Sans Kannada", "Noto Sans Tamil", sans-serif; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+header h1 { font-size: 18px; margin: 0; }
+header .sub { color: var(--muted); font-size: 13px; }
+main { display: grid; grid-template-columns: minmax(320px, 440px) 1fr; gap: 16px; padding: 16px 20px; max-width: 1400px; margin: 0 auto; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px 16px; } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.panel + .panel { margin-top: 12px; }
+h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
+label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+select, textarea, input[type=text] { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+textarea { min-height: 170px; resize: vertical; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { flex: 1; border: 0; background: var(--bg); color: var(--ink); padding: 8px; font: inherit; cursor: pointer; }
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+.checks { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; font-size: 14px; }
+.checks label { display: flex; gap: 8px; align-items: center; margin: 0; color: var(--ink); }
+.buttons { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.btn { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 8px; padding: 9px 14px; font: inherit; cursor: pointer; }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.btn:disabled { opacity: .55; cursor: wait; }
+.chip { display: inline-block; background: var(--chip); border-radius: 999px; padding: 2px 10px; font-size: 12px; color: var(--muted); }
+.chip.good { color: var(--good); } .chip.warn { color: var(--warn); } .chip.bad { color: var(--bad); }
+.method { font-size: 22px; font-weight: 700; margin-right: 8px; }
+ul.reasons { margin: 8px 0 0; padding-left: 18px; }
+ul.reasons li { margin: 2px 0; }
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+@media (max-width: 600px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+.metric { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+.metric .k { font-size: 12px; color: var(--muted); }
+.metric .v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.metric .s { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.answer { font-size: 17px; white-space: pre-wrap; }
+.pre { white-space: pre-wrap; background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 10px; font-size: 14px; max-height: 320px; overflow: auto; }
+details summary { cursor: pointer; color: var(--muted); margin: 8px 0; }
+.err { color: var(--bad); white-space: pre-wrap; }
+.muted { color: var(--muted); font-size: 13px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 700px) { .two { grid-template-columns: 1fr; } }
+.totals { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.totals b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.empty { color: var(--muted); text-align: center; padding: 40px 10px; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Indic Prompt Compressor</h1>
+    <div class="sub">Shrinks Hindi / Kannada / Tamil prompts before they reach the LLM: rule-based routing, local translation and pruning</div>
+  </div>
+  <div class="totals" id="totals">
+    <span>Requests <b id="t-n">0</b></span>
+    <span>Spent <b id="t-spent">₹0.0000</b></span>
+    <span>Saved <b id="t-saved">₹0.0000</b></span>
+    <span>Tokens saved <b id="t-tok">0</b></span>
+    <span id="health" class="chip">checking…</span>
+  </div>
+</header>
+
+<main>
+  <section>
+    <div class="panel">
+      <h2>Request</h2>
+      <div class="seg" id="task">
+        <button data-v="qa" class="on">Question</button>
+        <button data-v="summ">Summarise</button>
+        <button data-v="chat">Free prompt</button>
+      </div>
+      <div class="row">
+        <div><label for="model">Target model</label><select id="model"></select></div>
+        <div><label for="lang">Language</label>
+          <select id="lang"><option value="auto">Auto-detect</option><option value="hi">Hindi</option><option value="kn">Kannada</option><option value="ta">Tamil</option></select></div>
+      </div>
+      <div class="row">
+        <div><label for="profile">Routing profile</label>
+          <select id="profile"><option value="balanced">Balanced (mean quality ≥ 95%)</option><option value="safe">Safe (CI lower bound ≥ 95%)</option></select></div>
+        <div><label for="method">Method</label><select id="method"></select></div>
+      </div>
+      <div id="f-context"><label for="context" id="context-label">Context</label><textarea id="context" placeholder="Paste the passage here…"></textarea></div>
+      <div id="f-question"><label for="question">Question</label><input type="text" id="question" placeholder="Question about the passage"></div>
+      <div id="f-prompt" class="hidden"><label for="prompt">Prompt</label><textarea id="prompt" placeholder="Any Hindi / Kannada / Tamil prompt…"></textarea></div>
+      <div id="gold" class="muted hidden"></div>
+      <div class="checks">
+        <label><input type="checkbox" id="compare"> Also send the original prompt and compare (≈ 2× cost)</label>
+        <label><input type="checkbox" id="judge" disabled> Judge both answers with sarvam-105b</label>
+      </div>
+      <div class="buttons">
+        <button class="btn" id="b-example">Load example</button>
+        <button class="btn" id="b-preview" title="Routing + compressed prompt + token estimate. No LLM call.">Preview (free)</button>
+        <button class="btn primary" id="b-run">Send</button>
+      </div>
+      <div class="muted" style="margin-top:8px">The first request that needs a local model loads it (≈ 10–20 s). Later requests are faster.</div>
+    </div>
+  </section>
+
+  <section id="out">
+    <div class="panel empty" id="empty">Enter a prompt, then <b>Preview</b> to see what would be sent, or <b>Send</b> to call the model.</div>
+    <div class="panel hidden" id="p-error"><h2>Error</h2><div class="err" id="error"></div></div>
+
+    <div class="panel hidden" id="p-decision">
+      <h2>Routing decision</h2>
+      <div><span class="method" id="d-method"></span><span class="chip" id="d-status"></span> <span class="chip" id="d-lang"></span></div>
+      <div id="d-desc" class="muted" style="margin-top:4px"></div>
+      <ul class="reasons" id="d-reasons"></ul>
+      <div id="d-fallback" class="chip warn hidden" style="margin-top:8px"></div>
+    </div>
+
+    <div class="panel hidden" id="p-metrics">
+      <h2>Savings <span class="chip" id="m-kind"></span></h2>
+      <div class="metrics">
+        <div class="metric"><div class="k">Input tokens</div><div class="v" id="m-in"></div><div class="s" id="m-in-s"></div></div>
+        <div class="metric"><div class="k">Total tokens</div><div class="v" id="m-tok"></div><div class="s" id="m-tok-s"></div></div>
+        <div class="metric"><div class="k">Cost</div><div class="v" id="m-rs"></div><div class="s" id="m-rs-s"></div></div>
+        <div class="metric"><div class="k">Expected quality</div><div class="v" id="m-q"></div><div class="s" id="m-q-s"></div></div>
+      </div>
+      <div class="muted" id="m-time" style="margin-top:8px"></div>
+    </div>
+
+    <div class="panel hidden" id="p-answer">
+      <h2>Answer</h2>
+      <div class="answer" id="a-final"></div>
+      <details id="a-raw-wrap" class="hidden"><summary>English answer from the model (before back-translation)</summary><div class="pre" id="a-raw"></div></details>
+    </div>
+
+    <div class="panel hidden" id="p-compare">
+      <h2>Compared with the original prompt</h2>
+      <div class="two">
+        <div><div class="muted">Compressed route</div><div class="answer" id="c-new"></div><div class="muted" id="c-new-s"></div></div>
+        <div><div class="muted">Original prompt (M0)</div><div class="answer" id="c-old"></div><div class="muted" id="c-old-s"></div></div>
+      </div>
+      <div id="c-judge" class="muted" style="margin-top:10px"></div>
+    </div>
+
+    <div class="panel hidden" id="p-sent">
+      <h2>What was sent to the LLM</h2>
+      <div id="s-body"></div>
+      <details><summary>Raw messages</summary><div class="pre" id="s-msgs"></div></details>
+    </div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { task: "qa", options: null, totals: { n: 0, spent: 0, saved: 0, tok: 0 } };
+const rs = (x) => "₹" + (x ?? 0).toFixed(4);
+const pct = (x) => (x == null ? "–" : (100 * x).toFixed(0) + "%");
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function api(path, body) {
+  const r = await fetch(path, body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {});
+  const j = await r.json().catch(() => ({ detail: r.statusText }));
+  if (!r.ok) throw new Error(j.detail || r.statusText);
+  return j;
+}
+
+function fillMethods() {
+  const sel = $("method"), keep = sel.value;
+  sel.innerHTML = '<option value="auto">Auto (router)</option>' + state.options.methods
+    .filter((m) => m.tasks.includes(state.task))
+    .map((m) => `<option value="${m.id}" title="${esc(m.description)}">${m.id}: ${esc(m.description.slice(0, 48))}${m.description.length > 48 ? "…" : ""}</option>`).join("");
+  sel.value = [...sel.options].some((o) => o.value === keep) ? keep : "auto";
+}
+
+function setTask(t) {
+  state.task = t;
+  document.querySelectorAll("#task button").forEach((b) => b.classList.toggle("on", b.dataset.v === t));
+  $("f-context").classList.toggle("hidden", t === "chat");
+  $("f-question").classList.toggle("hidden", t !== "qa");
+  $("f-prompt").classList.toggle("hidden", t !== "chat");
+  $("context-label").textContent = t === "summ" ? "Text to summarise" : "Context";
+  $("gold").classList.add("hidden");
+  if (state.options) fillMethods();
+}
+
+function body() {
+  return {
+    task: state.task, model: $("model").value, lang: $("lang").value, profile: $("profile").value,
+    method: $("method").value, context: $("context").value, question: $("question").value, prompt: $("prompt").value,
+    compare: $("compare").checked, judge: $("judge").checked,
+  };
+}
+
+function show(ids) {
+  ["empty", "p-error", "p-decision", "p-metrics", "p-answer", "p-compare", "p-sent"].forEach((id) => $(id).classList.toggle("hidden", !ids.includes(id)));
+}
+
+function renderDecision(d, lang, fallback) {
+  $("d-method").textContent = d.method;
+  const st = $("d-status");
+  st.textContent = d.status;
+  st.className = "chip " + ({ measured: "good", override: "", guard: "warn" }[d.status] ?? "warn");
+  $("d-lang").textContent = lang;
+  $("d-desc").textContent = d.description;
+  $("d-reasons").innerHTML = d.reasons.map((r) => `<li>${esc(r)}</li>`).join("");
+  $("d-fallback").classList.toggle("hidden", !fallback);
+  if (fallback) $("d-fallback").textContent = "Fallback: " + fallback.reason;
+}
+
+function renderSent(sent, messages) {
+  const parts = [];
+  if (sent.context) parts.push(`<div class="muted">Text</div><div class="pre">${esc(sent.context)}</div>`);
+  if (sent.key_sentences) parts.push(`<div class="muted" style="margin-top:8px">Key original sentences</div><div class="pre">${esc(sent.key_sentences)}</div>`);
+  if (sent.question) parts.push(`<div class="muted" style="margin-top:8px">Question</div><div class="pre">${esc(sent.question)}</div>`);
+  $("s-body").innerHTML = parts.join("");
+  $("s-msgs").textContent = messages ? JSON.stringify(messages, null, 2) : "(shown in Preview)";
+}
+
+async function doPreview() {
+  busy(true);
+  try {
+    const r = await api("/api/preview", body());
+    show(["p-decision", "p-metrics", "p-sent"]);
+    renderDecision(r.decision, r.lang, null);
+    $("m-kind").textContent = "offline estimate" + (r.tokens.tokenizer_exact ? "" : " (approx. tokenizer)");
+    $("m-in").textContent = `${r.tokens.original_input} → ${r.tokens.compressed_input}`;
+    $("m-in-s").textContent = `${pct(r.tokens.input_saving)} fewer input tokens`;
+    $("m-tok").textContent = "–"; $("m-tok-s").textContent = "known after Send";
+    const ev = r.decision.evidence;
+    $("m-rs").textContent = ev ? `−${ev.saving.toFixed(0)}%` : "–";
+    $("m-rs-s").textContent = ev ? "measured ₹ saving for this rule (Run 4)" : "no measurement for this route";
+    $("m-q").textContent = ev ? pct(ev.retained) : "–";
+    $("m-q-s").textContent = ev ? `CI lower bound ${pct(ev.ci_lo)}` : "not validated";
+    $("m-time").textContent = `Local preparation: ${r.local_s}s`;
+    renderSent(r.sent, r.messages);
+  } catch (e) { showError(e); } finally { busy(false); }
+}
+
+async function doRun() {
+  busy(true);
+  try {
+    const r = await api("/api/run", body());
+    const ids = ["p-decision", "p-metrics", "p-answer", "p-sent"];
+    if (r.original) ids.push("p-compare");
+    show(ids);
+    renderDecision(r.decision, `${r.lang_name} · ${r.model_label}`, r.fallback);
+    const u = r.usage, b = r.baseline, s = r.savings;
+    $("m-kind").textContent = b.kind === "measured" ? "measured against the original" : "original estimated with the tokenizer";
+    $("m-in").textContent = `${b.prompt_tokens} → ${u.prompt_tokens}`;
+    $("m-in-s").textContent = `${pct(s.input_pct)} fewer`;
+    $("m-tok").textContent = `${b.prompt_tokens + b.completion_tokens} → ${u.prompt_tokens + u.completion_tokens}`;
+    $("m-tok-s").textContent = `${pct(s.tokens_pct)} fewer` + (u.reasoning_tokens ? ` · ${u.reasoning_tokens} reasoning` : "");
+    $("m-rs").textContent = `${rs(b.cost_rs)} → ${rs(u.cost_rs)}`;
+    $("m-rs-s").textContent = `${pct(s.rs_pct)} saved (${rs(s.rs)})`;
+    const q = r.expected_quality;
+    $("m-q").textContent = r.judge && r.judge.retained != null ? pct(r.judge.retained) : q ? pct(q.retained) : "–";
+    $("m-q-s").textContent = r.judge && r.judge.retained != null ? "judged on this request" : q ? `${q.source}; CI low ${pct(q.ci_lo)}` : "not validated";
+    const t = r.timing;
+    $("m-time").textContent = `Prepare ${t.prepare_s}s · LLM ${t.llm_s}s · back-translate ${t.back_translate_s}s · total ${t.total_s}s · finish: ${u.finish_reason}`;
+    $("a-final").textContent = r.answer || "(empty answer)";
+    $("a-raw-wrap").classList.toggle("hidden", !r.answer_raw);
+    $("a-raw").textContent = r.answer_raw || "";
+    if (r.original) {
+      $("c-new").textContent = r.answer; $("c-old").textContent = r.original.answer;
+      $("c-new-s").textContent = `${u.prompt_tokens + u.completion_tokens} tokens · ${rs(u.cost_rs)}`;
+      $("c-old-s").textContent = `${r.original.prompt_tokens + r.original.completion_tokens} tokens · ${rs(r.original.cost_rs)}`;
+      const j = r.judge;
+      $("c-judge").textContent = j ? `Judge (${j.model}): compressed ${fmtScore(j.compressed)} · original ${fmtScore(j.original)} · retained ${pct(j.retained)}` : "";
+    }
+    renderSent(r.sent, null);
+    const T = state.totals;
+    T.n += 1; T.spent += u.cost_rs; T.saved += s.rs; T.tok += s.tokens;
+    $("t-n").textContent = T.n; $("t-spent").textContent = rs(T.spent); $("t-saved").textContent = rs(T.saved); $("t-tok").textContent = T.tok;
+  } catch (e) { showError(e); } finally { busy(false); }
+}
+
+function fmtScore(x) {
+  if (!x || x.score == null) return "n/a";
+  const v = x.verdict || {};
+  return (v.verdict ? v.verdict : (100 * x.score).toFixed(0) + "%") + (v.reason ? ` (“${v.reason}”)` : "");
+}
+
+async function doExample() {
+  const lang = $("lang").value === "auto" ? ["hi", "kn", "ta"][Math.floor(Math.random() * 3)] : $("lang").value;
+  const task = state.task === "chat" ? "summ" : state.task;
+  busy(true);
+  try {
+    const r = await api(`/api/examples?lang=${lang}&task=${task}`);
+    const ask = { hi: "नीचे दिए गए पाठ का सारांश तीन बिंदुओं में लिखिए:", kn: "ಕೆಳಗಿನ ಪಠ್ಯವನ್ನು ಮೂರು ಅಂಶಗಳಲ್ಲಿ ಸಂಕ್ಷೇಪಿಸಿ:", ta: "கீழே உள்ள உரையை மூன்று புள்ளிகளில் சுருக்கமாக எழுதவும்:" };
+    if (state.task === "chat") { $("prompt").value = ask[lang] + "\n\n" + r.context; }
+    else { $("context").value = r.context; $("question").value = r.question; }
+    const g = $("gold");
+    g.classList.toggle("hidden", !(r.gold && r.gold.length && state.task === "qa"));
+    g.textContent = "Reference answer (IndicQA): " + (r.gold || []).join(" | ");
+  } catch (e) { showError(e); } finally { busy(false); }
+}
+
+function showError(e) { show(["p-error"]); $("error").textContent = e.message || String(e); }
+function busy(on) { ["b-run", "b-preview", "b-example"].forEach((id) => ($(id).disabled = on)); $("b-run").textContent = on ? "Working…" : "Send"; }
+
+document.querySelectorAll("#task button").forEach((b) => b.addEventListener("click", () => setTask(b.dataset.v)));
+$("compare").addEventListener("change", () => { $("judge").disabled = !$("compare").checked; if (!$("compare").checked) $("judge").checked = false; });
+$("b-preview").addEventListener("click", doPreview);
+$("b-run").addEventListener("click", doRun);
+$("b-example").addEventListener("click", doExample);
+
+(async () => {
+  try {
+    state.options = await api("/api/options");
+    $("model").innerHTML = state.options.models.map((m) => `<option value="${m.id}">${esc(m.label)} (₹${m.price[0]}/${m.price[1]} per 1M)</option>`).join("");
+    $("model").value = state.options.default_model;
+    fillMethods();
+    const h = await api("/api/health");
+    $("health").textContent = h.sarvam_key ? `API key ok · ${h.local_models.device}` : "SARVAM_API_KEY missing";
+    $("health").className = "chip " + (h.sarvam_key ? "good" : "bad");
+  } catch (e) { $("health").textContent = "backend offline"; $("health").className = "chip bad"; }
+})();
+</script>
+</body>
+</html>
